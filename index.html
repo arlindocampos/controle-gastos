@@ -252,7 +252,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDvs6JCL1LsTrrntNcpnEp-qvRheB6BiKY",
   authDomain: "controle-gastos-57fc1.firebaseapp.com",
   projectId: "controle-gastos-57fc1",
-  storageBucket: "controle-gastos-57fc1.firebasestorage.app",
+  storageBucket: "controle-gastos-57fc1.appspot.com",
   messagingSenderId: "501352969307",
   appId: "1:501352969307:web:3e06e4869e9e37d7113b7e",
   measurementId: "G-2NKX3KRH7J"
@@ -270,8 +270,17 @@ const firebaseConfig = {
   }
 
   // ── Firebase ─────────────────────────────────────────
-  const app      = initializeApp(firebaseConfig);
-  const db       = getFirestore(app);
+let db;
+
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+} catch (err) {
+  console.error(err);
+  hideLoading();
+  setSyncStatus('error', 'falha firebase');
+  iniciarLocalStorage();
+}
   const tetoRef  = doc(db, "config", "teto");
   const gastosCol = collection(db, "gastos");
 
