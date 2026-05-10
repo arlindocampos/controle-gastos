@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Gastos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --surface2: #1e2230;
+    --border: #2a2f3f;
+    --accent: #f0b429;
+    --accent2: #e05c3a;
+    --green: #3ecf8e;
+    --text: #e8eaf2;
+    --muted: #6b7394;
+    --danger: #ff4d6d;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-mono); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 40% at 20% -10%, rgba(240,180,41,0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 110%, rgba(62,207,142,0.05) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  #loadingScreen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; gap: 1rem; transition: opacity 0.4s;
+  }
+  #loadingScreen.hidden { opacity: 0; pointer-events: none; }
+  #loadingScreen.gone   { display: none; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  .loading-text { font-size: 0.72rem; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #configBanner {
+    background: rgba(240,180,41,0.1); border: 1px solid rgba(240,180,41,0.3);
+    border-radius: 10px; padding: 1rem 1.4rem; margin-bottom: 1.5rem;
+    font-size: 0.8rem; line-height: 1.7; display: none; animation: fadeUp 0.4s ease both;
+  }
+  #configBanner strong { color: var(--accent); }
+  #configBanner code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; }
+
+  .sync-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; transition: background 0.3s; }
+  .sync-dot.ok      { background: var(--green); }
+  .sync-dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
+  .sync-dot.error   { background: var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; position: relative; z-index: 1; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); animation: fadeDown 0.5s ease both; }
+  .logo { font-family: var(--font-head); font-weight: 800; font-size: 1.7rem; letter-spacing: -0.03em; line-height: 1; }
+  .logo span { color: var(--accent); }
+  .header-right { text-align: right; }
+  .month-label { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+  .sync-status { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.08em; margin-top: 4px; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem; animation: fadeUp 0.5s 0.1s ease both; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.4rem; position: relative; overflow: hidden; }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px 2px 0 0; }
+  .card.teto::before  { background: var(--accent); }
+  .card.gasto::before { background: var(--accent2); }
+  .card.saldo::before { background: var(--green); }
+  .card-label { font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem; }
+  .card-value { font-family: var(--font-head); font-size: 1.7rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; transition: color 0.3s; }
+  .card.saldo .card-value { color: var(--green); }
+  .card.saldo .card-value.warning { color: var(--accent); }
+  .card.saldo .card-value.danger  { color: var(--danger); }
+
+  .progress-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem; margin-bottom: 2rem; animation: fadeUp 0.5s 0.15s ease both; }
+  .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .progress-pct { font-family: var(--font-head); font-weight: 700; font-size: 0.9rem; }
+  .progress-track { height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: var(--green); transition: width 0.6s cubic-bezier(.4,0,.2,1), background 0.4s; width: 0%; }
+
+  .main-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.2rem; animation: fadeUp 0.5s 0.2s ease both; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .panel-title { font-family: var(--font-head); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 1rem 1.4rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .panel-body { padding: 1.2rem 1.4rem; }
+
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+  .field input, .field select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 0.6rem 0.85rem; font-family: var(--font-mono); font-size: 0.9rem; transition: border-color 0.2s, box-shadow 0.2s; outline: none; appearance: none; }
+  .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(240,180,41,0.1); }
+  .field input::placeholder { color: var(--muted); }
+
+  .btn { width: 100%; padding: 0.7rem; border: none; border-radius: 8px; font-family: var(--font-head); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.08em; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
+  .btn:active { transform: scale(0.97); }
+  .btn-accent { background: var(--accent); color: #0d0f14; }
+  .btn-add    { background: var(--green);  color: #0d0f14; margin-top: 0.3rem; }
+  .btn:hover  { opacity: 0.88; }
+
+  .expense-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+  .expense-list::-webkit-scrollbar { width: 4px; }
+  .expense-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .expense-item { display: flex; align-items: center; gap: 0.8rem; background: var(--surface2); border-radius: 8px; padding: 0.7rem 0.9rem; animation: slideIn 0.25s ease both; }
+  .expense-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .expense-info { flex: 1; min-width: 0; }
+  .expense-desc { font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .expense-meta { font-size: 0.65rem; color: var(--muted); margin-top: 0.15rem; }
+  .expense-amount { font-family: var(--font-head); font-weight: 700; font-size: 0.9rem; color: var(--accent2); flex-shrink: 0; }
+  .expense-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 0 0.2rem; transition: color 0.2s; flex-shrink: 0; }
+  .expense-del:hover { color: var(--danger); }
+  .cat-chip { display: inline-block; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.15rem 0.45rem; border-radius: 4px; }
+  .empty-state { text-align: center; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.08em; padding: 2rem 0; }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1.2rem; font-size: 0.8rem; z-index: 999; animation: toastIn 0.3s ease both; max-width: 280px; }
+  .toast.hide { animation: toastOut 0.3s ease both; }
+
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes slideIn  { from{opacity:0;transform:translateX(-8px)}  to{opacity:1;transform:translateX(0)} }
+  @keyframes toastIn  { from{opacity:0;transform:translateY(10px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes toastOut { from{opacity:1;transform:translateY(0)}     to{opacity:0;transform:translateY(10px)} }
+
+  @media (max-width: 620px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .summary-grid .card.saldo { grid-column: 1 / -1; }
+    .main-grid { grid-template-columns: 1fr; }
+    .card-value { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <div class="loading-text">Conectando ao banco de dados…</div>
+</div>
+
+<div class="container">
+  <div id="configBanner">
+    ⚠️ <strong>Firebase não configurado.</strong>
+    Abra o arquivo <code>index.html</code> no seu editor, localize a seção
+    <code>COLE AQUI AS SUAS CREDENCIAIS</code> e substitua pelos dados do seu projeto Firebase.
+    Os dados estão sendo salvos <strong>localmente</strong> no navegador por enquanto.
+  </div>
+
+  <header>
+    <div class="logo">grana<span>.</span>watch</div>
+    <div class="header-right">
+      <div class="month-label" id="monthLabel"></div>
+      <div class="sync-status"><span class="sync-dot" id="syncDot"></span><span id="syncText">aguardando…</span></div>
+    </div>
+  </header>
+
+  <div class="summary-grid">
+    <div class="card teto">
+      <div class="card-label">Teto do mês</div>
+      <div class="card-value" id="cardTeto">R$ —</div>
+    </div>
+    <div class="card gasto">
+      <div class="card-label">Gasto até agora</div>
+      <div class="card-value" id="cardGasto">R$ 0,00</div>
+    </div>
+    <div class="card saldo">
+      <div class="card-label">Ainda posso gastar</div>
+      <div class="card-value" id="cardSaldo">—</div>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-header">
+      <span>Orçamento utilizado</span>
+      <span class="progress-pct" id="pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div>
+      <div class="panel" style="margin-bottom:1.2rem;">
+        <div class="panel-title">Teto mensal</div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Limite (R$)</label>
+            <input type="number" id="tetoInput" placeholder="ex: 3000" min="0" step="0.01">
+          </div>
+          <button class="btn btn-accent" onclick="salvarTeto()">Definir teto</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Novo gasto</div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Descrição</label>
+            <input type="text" id="descInput" placeholder="ex: almoço, uber...">
+          </div>
+          <div class="field">
+            <label>Valor (R$)</label>
+            <input type="number" id="valorInput" placeholder="0,00" min="0" step="0.01">
+          </div>
+          <div class="field">
+            <label>Categoria</label>
+            <select id="catInput">
+              <option value="alimentação">🍽️ Alimentação</option>
+              <option value="transporte">🚌 Transporte</option>
+              <option value="saúde">💊 Saúde</option>
+              <option value="lazer">🎮 Lazer</option>
+              <option value="moradia">🏠 Moradia</option>
+              <option value="compras">🛍️ Compras</option>
+              <option value="assinaturas">📱 Assinaturas</option>
+              <option value="outros">📦 Outros</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Data</label>
+            <input type="date" id="dataInput">
+          </div>
+          <button class="btn btn-add" onclick="adicionarGasto()">+ Registrar gasto</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Gastos registrados</span>
+        <button onclick="limparTudo()" style="background:none;border:none;color:var(--muted);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:var(--font-mono);transition:color 0.2s;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--muted)'">Limpar tudo</button>
+      </div>
+      <div class="panel-body">
+        <div class="expense-list" id="expenseList">
+          <div class="empty-state">Carregando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK (module) -->
+<script type="module">
+  import { initializeApp }
+    from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, collection, addDoc,
+           deleteDoc, onSnapshot, query, orderBy }
+    from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  // ════════════════════════════════════════════════════
+  // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
+  // ════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyDvs6JCL1LsTrrntNcpnEp-qvRheB6BiKY",
+  authDomain: "controle-gastos-57fc1.firebaseapp.com",
+  projectId: "controle-gastos-57fc1",
+  storageBucket: "controle-gastos-57fc1.firebasestorage.app",
+  messagingSenderId: "501352969307",
+  appId: "1:501352969307:web:3e06e4869e9e37d7113b7e",
+  measurementId: "G-2NKX3KRH7J"
+};
+  // ════════════════════════════════════════════════════
+
+  const CONFIGURED = firebaseConfig.apiKey !== "COLE_AQUI" && firebaseConfig.apiKey.length > 10;
+
+  if (!CONFIGURED) {
+    document.getElementById('configBanner').style.display = 'block';
+    hideLoading();
+    setSyncStatus('error', 'não configurado — usando local');
+    iniciarLocalStorage();
+    return;
+  }
+
+  // ── Firebase ─────────────────────────────────────────
+  const app      = initializeApp(firebaseConfig);
+  const db       = getFirestore(app);
+  const tetoRef  = doc(db, "config", "teto");
+  const gastosCol = collection(db, "gastos");
+
+  // Listener: teto
+  onSnapshot(tetoRef, snap => {
+    window._teto = snap.exists() ? (snap.data().valor || 0) : 0;
+    if (window._teto) document.getElementById('tetoInput').value = window._teto;
+    renderUI();
+  }, err => console.error('teto:', err));
+
+  // Listener: gastos (tempo real)
+  onSnapshot(query(gastosCol, orderBy("criadoEm", "desc")), snap => {
+    window._gastos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderUI();
+    hideLoading();
+    setSyncStatus('ok', 'sincronizado');
+  }, err => {
+    console.error('gastos:', err);
+    setSyncStatus('error', 'erro de conexão');
+    hideLoading();
+  });
+
+  window.salvarTeto = async () => {
+    const v = parseFloat(document.getElementById('tetoInput').value);
+    if (!v || v <= 0) { toast('⚠️ Informe um valor válido.'); return; }
+    setSyncStatus('syncing', 'salvando…');
+    await setDoc(tetoRef, { valor: v });
+    toast('✅ Teto definido!');
+  };
+
+  window.adicionarGasto = async () => {
+    const desc  = document.getElementById('descInput').value.trim();
+    const valor = parseFloat(document.getElementById('valorInput').value);
+    const cat   = document.getElementById('catInput').value;
+    const data  = document.getElementById('dataInput').value;
+    if (!desc)          { toast('⚠️ Adicione uma descrição.'); return; }
+    if (!valor||valor<=0) { toast('⚠️ Informe um valor válido.'); return; }
+    if (!data)          { toast('⚠️ Selecione a data.'); return; }
+    setSyncStatus('syncing', 'salvando…');
+    await addDoc(gastosCol, { desc, valor, cat, data, criadoEm: Date.now() });
+    document.getElementById('descInput').value  = '';
+    document.getElementById('valorInput').value = '';
+    toast('✅ Gasto registrado!');
+  };
+
+  window.removerGasto = async (id) => {
+    setSyncStatus('syncing', 'removendo…');
+    await deleteDoc(doc(db, "gastos", id));
+  };
+
+  window.limparTudo = async () => {
+    if (!window._gastos?.length) { toast('Nenhum gasto para limpar.'); return; }
+    if (!confirm('Remover todos os gastos?')) return;
+    setSyncStatus('syncing', 'limpando…');
+    await Promise.all(window._gastos.map(g => deleteDoc(doc(db, "gastos", g.id))));
+    toast('🗑️ Gastos removidos.');
+  };
+
+  // ── localStorage fallback ────────────────────────────
+  function iniciarLocalStorage() {
+    window._teto   = parseFloat(localStorage.getItem('gw_teto'))  || 0;
+    window._gastos = JSON.parse(localStorage.getItem('gw_gastos') || '[]');
+    if (window._teto) document.getElementById('tetoInput').value = window._teto;
+
+    const save = () => {
+      localStorage.setItem('gw_teto',   window._teto);
+      localStorage.setItem('gw_gastos', JSON.stringify(window._gastos));
+    };
+
+    window.salvarTeto = () => {
+      const v = parseFloat(document.getElementById('tetoInput').value);
+      if (!v||v<=0) { toast('⚠️ Informe um valor válido.'); return; }
+      window._teto = v; save(); renderUI(); toast('✅ Teto definido (local)!');
+    };
+    window.adicionarGasto = () => {
+      const desc  = document.getElementById('descInput').value.trim();
+      const valor = parseFloat(document.getElementById('valorInput').value);
+      const cat   = document.getElementById('catInput').value;
+      const data  = document.getElementById('dataInput').value;
+      if (!desc||!valor||valor<=0||!data) { toast('⚠️ Preencha todos os campos.'); return; }
+      window._gastos.unshift({ id: Date.now(), desc, valor, cat, data });
+      save(); renderUI();
+      document.getElementById('descInput').value  = '';
+      document.getElementById('valorInput').value = '';
+      toast('✅ Gasto registrado (local)!');
+    };
+    window.removerGasto = (id) => {
+      window._gastos = window._gastos.filter(g => String(g.id) !== String(id));
+      save(); renderUI();
+    };
+    window.limparTudo = () => {
+      if (!window._gastos.length) { toast('Nenhum gasto.'); return; }
+      if (!confirm('Remover tudo?')) return;
+      window._gastos = []; save(); renderUI(); toast('🗑️ Removido.');
+    };
+    renderUI();
+  }
+</script>
+
+<!-- UI helpers (não depende do Firebase) -->
+<script>
+  window._teto   = 0;
+  window._gastos = [];
+
+  // Esconde a tela de carregamento com fade + display:none
+  function hideLoading() {
+    const el = document.getElementById('loadingScreen');
+    el.classList.add('hidden');
+    setTimeout(() => el.classList.add('gone'), 450);
+  }
+  window.hideLoading = hideLoading;
+
+  // Segurança: esconde após 8s mesmo que algo dê errado
+  setTimeout(() => {
+    const el = document.getElementById('loadingScreen');
+    if (!el.classList.contains('gone')) {
+      hideLoading();
+      setSyncStatus('error', 'tempo esgotado');
+    }
+  }, 8000);
+
+  const CAT_COLORS = {
+    'alimentação':'#f0b429','transporte':'#60a5fa','saúde':'#34d399',
+    'lazer':'#a78bfa','moradia':'#fb923c','compras':'#f472b6',
+    'assinaturas':'#22d3ee','outros':'#94a3b8'
+  };
+
+  function fmt(v) { return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+
+  function renderUI() {
+    const teto   = window._teto   || 0;
+    const gastos = window._gastos || [];
+    const total  = gastos.reduce((s,g) => s + g.valor, 0);
+    const saldo  = teto - total;
+    const pct    = teto > 0 ? Math.min((total / teto) * 100, 100) : 0;
+
+    document.getElementById('cardTeto').textContent  = teto ? fmt(teto) : 'R$ —';
+    document.getElementById('cardGasto').textContent = fmt(total);
+
+    const saldoEl = document.getElementById('cardSaldo');
+    if (!teto) { saldoEl.textContent = '—'; saldoEl.className = 'card-value'; }
+    else {
+      saldoEl.textContent = fmt(Math.max(saldo, 0));
+      saldoEl.className   = 'card-value' + (pct>=90?' danger':pct>=70?' warning':'');
+    }
+
+    const fill = document.getElementById('progressFill');
+    fill.style.width      = pct + '%';
+    fill.style.background = pct>=90 ? 'var(--danger)' : pct>=70 ? 'var(--accent)' : 'var(--green)';
+    document.getElementById('pct').textContent = Math.round(pct) + '%';
+
+    const list = document.getElementById('expenseList');
+    if (!gastos.length) {
+      list.innerHTML = '<div class="empty-state">Nenhum gasto registrado ainda.</div>';
+      return;
+    }
+    list.innerHTML = gastos.map(g => {
+      const cor     = CAT_COLORS[g.cat] || '#94a3b8';
+      const dataFmt = new Date(g.data + 'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+      return `
+        <div class="expense-item">
+          <span class="expense-dot" style="background:${cor}"></span>
+          <div class="expense-info">
+            <div class="expense-desc">${g.desc}</div>
+            <div class="expense-meta">
+              <span class="cat-chip" style="background:${cor}22;color:${cor}">${g.cat}</span>
+              &nbsp;${dataFmt}
+            </div>
+          </div>
+          <span class="expense-amount">${fmt(g.valor)}</span>
+          <button class="expense-del" onclick="removerGasto('${g.id}')" title="Remover">×</button>
+        </div>`;
+    }).join('');
+  }
+
+  function setSyncStatus(state, text) {
+    document.getElementById('syncDot').className = 'sync-dot ' + state;
+    document.getElementById('syncText').textContent = text;
+  }
+
+  let _toastTimer;
+  function toast(msg) {
+    document.querySelector('.toast')?.remove();
+    const el = Object.assign(document.createElement('div'), { className:'toast', textContent:msg });
+    document.body.appendChild(el);
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.classList.add('hide'); setTimeout(()=>el.remove(), 300); }, 2500);
+  }
+
+  document.getElementById('monthLabel').textContent =
+    new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  document.getElementById('dataInput').value =
+    new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
