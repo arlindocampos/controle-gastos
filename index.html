@@ -116,12 +116,6 @@
   .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1.2rem; font-size: 0.8rem; z-index: 999; animation: toastIn 0.3s ease both; max-width: 280px; }
   .toast.hide { animation: toastOut 0.3s ease both; }
 
-  @keyframes fadeDown { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeUp   { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
-  @keyframes slideIn  { from{opacity:0;transform:translateX(-8px)}  to{opacity:1;transform:translateX(0)} }
-  @keyframes toastIn  { from{opacity:0;transform:translateY(10px)}  to{opacity:1;transform:translateY(0)} }
-  @keyframes toastOut { from{opacity:1;transform:translateY(0)}     to{opacity:0;transform:translateY(10px)} }
-
   @media (max-width: 620px) {
     .summary-grid { grid-template-columns: 1fr 1fr; }
     .summary-grid .card.saldo { grid-column: 1 / -1; }
@@ -140,18 +134,17 @@
 <div class="container">
   <div id="configBanner">
     ⚠️ <strong>Firebase não configurado.</strong>
-    Abra o arquivo <code>index.html</code> no seu editor, localize a seção
-    <code>COLE AQUI AS SUAS CREDENCIAIS</code> e substitua pelos dados do seu projeto Firebase.
-    Os dados estão sendo salvos <strong>localmente</strong> no navegador por enquanto.
+    Os dados estão a ser guardados <strong>localmente</strong> no navegador.
   </div>
 
-  <header>
-    <div class="logo">grana<span>.</span>watch</div>
-    <div class="header-right">
-      <div class="month-label" id="monthLabel"></div>
-      <div class="sync-status"><span class="sync-dot" id="syncDot"></span><span id="syncText">aguardando…</span></div>
-    </div>
-  </header>
+ <header>
+  <div class="logo">grana<span>.</span>watch</div>
+  <div class="header-right">
+    <input type="month" id="mesFiltro" 
+           style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.8rem; cursor: pointer;">
+    <div class="sync-status"><span class="sync-dot" id="syncDot"></span><span id="syncText">aguardando…</span></div>
+  </div>
+</header>
 
   <div class="summary-grid">
     <div class="card teto">
@@ -159,7 +152,7 @@
       <div class="card-value" id="cardTeto">R$ —</div>
     </div>
     <div class="card gasto">
-      <div class="card-label">Gasto até agora</div>
+      <div class="card-label">Gasto no mês</div>
       <div class="card-value" id="cardGasto">R$ 0,00</div>
     </div>
     <div class="card saldo">
@@ -184,7 +177,7 @@
         <div class="panel-title">Teto mensal</div>
         <div class="panel-body">
           <div class="field">
-            <label>Limite (R$)</label>
+            <label>Limite (R$) para o mês selecionado</label>
             <input type="number" id="tetoInput" placeholder="ex: 3000" min="0" step="0.01">
           </div>
           <button class="btn btn-accent" onclick="salvarTeto()">Definir teto</button>
@@ -225,9 +218,12 @@
 
     <div class="panel">
       <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Gastos registrados</span>
-        <button onclick="limparTudo()" style="background:none;border:none;color:var(--muted);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:var(--font-mono);transition:color 0.2s;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--muted)'">Limpar tudo</button>
-      </div>
+        <span>Gastos do Mês</span>
+        <div>
+          <button onclick="exportarCSV()" style="background:none;border:none;color:var(--green);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:var(--font-mono);margin-right:10px;">Exportar CSV</button>
+          <button onclick="limparTudo()" style="background:none;border:none;color:var(--muted);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:var(--font-mono);">Limpar Mês</button>
+        </div>
+    </div>
       <div class="panel-body">
         <div class="expense-list" id="expenseList">
           <div class="empty-state">Carregando…</div>
@@ -237,127 +233,18 @@
   </div>
 </div>
 
-<!-- Firebase SDK (module) -->
-<script type="module">
-  import { initializeApp }
-    from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getFirestore, doc, setDoc, collection, addDoc,
-           deleteDoc, onSnapshot, query, orderBy }
-    from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-
-  // ════════════════════════════════════════════════════
-  // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
-  // ════════════════════════════════════════════════════
-  const firebaseConfig = {
-    apiKey: "AIzaSyBDHygEQHqXYzebYqvL5vICCIjY0xD7-uM",
-    authDomain: "meus-gastos-d7dc2.firebaseapp.com",
-    projectId: "meus-gastos-d7dc2",
-    storageBucket: "meus-gastos-d7dc2.firebasestorage.app",
-    messagingSenderId: "965342526071",
-    appId: "1:965342526071:web:b59c78862fefad4e8c6472"
-  };
-  // ════════════════════════════════════════════════════
-
-  const CONFIGURED = firebaseConfig.apiKey !== "COLE_AQUI" && firebaseConfig.apiKey.length > 10;
-
-  if (!CONFIGURED) {
-    document.getElementById('configBanner').style.display = 'block';
-    window.hideLoading();
-    window.setSyncStatus('error', 'não configurado — usando local');
-    window.iniciarLocalStorage();
-  }
-
-  // ── Firebase ─────────────────────────────────────────
-  let db;
-
-  try {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-  } catch (err) {
-    console.error(err);
-    window.hideLoading();
-    window.setSyncStatus('error', 'falha ao iniciar firebase');
-    window.iniciarLocalStorage();
-    // Interrompe a execução do módulo se o Firebase falhar na inicialização
-    throw err;
-  }
-
-  const tetoRef   = doc(db, "config", "teto");
-  const gastosCol = collection(db, "gastos");
-
-  // Listener: teto
-  onSnapshot(tetoRef, snap => {
-    window._teto = snap.exists() ? (snap.data().valor || 0) : 0;
-    if (window._teto) document.getElementById('tetoInput').value = window._teto;
-    window.renderUI();
-  }, err => {
-    console.error('teto:', err);
-  });
-
-  // ─────────────────────────────────────────────────────
-  // CORREÇÃO: removido o orderBy do Firestore.
-  // O orderBy exigia um índice especial no Firebase que não é
-  // criado automaticamente. Agora ordenamos no próprio JavaScript,
-  // o que funciona igual e não depende de configuração extra.
-  // ─────────────────────────────────────────────────────
-  onSnapshot(query(gastosCol), snap => {
-    window._gastos = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0)); // ordenação client-side
-    window.renderUI();
-    window.hideLoading();
-    window.setSyncStatus('ok', 'sincronizado');
-  }, err => {
-    console.error('gastos:', err);
-    window.setSyncStatus('error', 'erro de conexão — usando local');
-    window.hideLoading();
-    // CORREÇÃO: agora cai pro localStorage quando o Firebase falha
-    window.iniciarLocalStorage();
-  });
-
-  window.salvarTeto = async () => {
-    const v = parseFloat(document.getElementById('tetoInput').value);
-    if (!v || v <= 0) { window.toast('⚠️ Informe um valor válido.'); return; }
-    window.setSyncStatus('syncing', 'salvando…');
-    await setDoc(tetoRef, { valor: v });
-    window.toast('✅ Teto definido!');
-  };
-
-  window.adicionarGasto = async () => {
-    const desc  = document.getElementById('descInput').value.trim();
-    const valor = parseFloat(document.getElementById('valorInput').value);
-    const cat   = document.getElementById('catInput').value;
-    const data  = document.getElementById('dataInput').value;
-    if (!desc)            { window.toast('⚠️ Adicione uma descrição.'); return; }
-    if (!valor||valor<=0) { window.toast('⚠️ Informe um valor válido.'); return; }
-    if (!data)            { window.toast('⚠️ Selecione a data.'); return; }
-    window.setSyncStatus('syncing', 'salvando…');
-    await addDoc(gastosCol, { desc, valor, cat, data, criadoEm: Date.now() });
-    document.getElementById('descInput').value  = '';
-    document.getElementById('valorInput').value = '';
-    window.toast('✅ Gasto registrado!');
-  };
-
-  window.removerGasto = async (id) => {
-    window.setSyncStatus('syncing', 'removendo…');
-    await deleteDoc(doc(db, "gastos", id));
-  };
-
-  window.limparTudo = async () => {
-    if (!window._gastos?.length) { window.toast('Nenhum gasto para limpar.'); return; }
-    if (!confirm('Remover todos os gastos?')) return;
-    window.setSyncStatus('syncing', 'limpando…');
-    await Promise.all(window._gastos.map(g => deleteDoc(doc(db, "gastos", g.id))));
-    window.toast('🗑️ Gastos removidos.');
-  };
-</script>
-
-<!-- UI helpers (não depende do Firebase) -->
 <script>
-  window._teto   = 0;
+  window._teto = 0;
   window._gastos = [];
 
-  // Esconde a tela de carregamento com fade + display:none
+  // Configuração inicial das datas (Mês atual)
+  const hojeObj = new Date();
+  const tzOffset = hojeObj.getTimezoneOffset() * 60000;
+  const hojeLocal = new Date(hojeObj - tzOffset).toISOString().split('T')[0];
+  
+  document.getElementById('mesFiltro').value = hojeLocal.slice(0, 7);
+  document.getElementById('dataInput').value = hojeLocal;
+
   function hideLoading() {
     const el = document.getElementById('loadingScreen');
     if (!el) return;
@@ -365,64 +252,6 @@
     setTimeout(() => el.classList.add('gone'), 450);
   }
   window.hideLoading = hideLoading;
-
-  // ─────────────────────────────────────────────────────
-  // CORREÇÃO: iniciarLocalStorage agora está exposta no window
-  // para que o timeout de segurança (e o módulo Firebase)
-  // consigam chamá-la de qualquer lugar.
-  // ─────────────────────────────────────────────────────
-  window.iniciarLocalStorage = function iniciarLocalStorage() {
-    // Evita rodar duas vezes caso Firebase e timeout disparem juntos
-    if (window._localStorageAtivo) return;
-    window._localStorageAtivo = true;
-
-    window._teto   = parseFloat(localStorage.getItem('gw_teto'))  || 0;
-    window._gastos = JSON.parse(localStorage.getItem('gw_gastos') || '[]');
-    if (window._teto) document.getElementById('tetoInput').value = window._teto;
-
-    const save = () => {
-      localStorage.setItem('gw_teto',   window._teto);
-      localStorage.setItem('gw_gastos', JSON.stringify(window._gastos));
-    };
-
-    window.salvarTeto = () => {
-      const v = parseFloat(document.getElementById('tetoInput').value);
-      if (!v||v<=0) { window.toast('⚠️ Informe um valor válido.'); return; }
-      window._teto = v; save(); window.renderUI(); window.toast('✅ Teto definido (local)!');
-    };
-    window.adicionarGasto = () => {
-      const desc  = document.getElementById('descInput').value.trim();
-      const valor = parseFloat(document.getElementById('valorInput').value);
-      const cat   = document.getElementById('catInput').value;
-      const data  = document.getElementById('dataInput').value;
-      if (!desc||!valor||valor<=0||!data) { window.toast('⚠️ Preencha todos os campos.'); return; }
-      window._gastos.unshift({ id: Date.now(), desc, valor, cat, data });
-      save(); window.renderUI();
-      document.getElementById('descInput').value  = '';
-      document.getElementById('valorInput').value = '';
-      window.toast('✅ Gasto registrado (local)!');
-    };
-    window.removerGasto = (id) => {
-      window._gastos = window._gastos.filter(g => String(g.id) !== String(id));
-      save(); window.renderUI();
-    };
-    window.limparTudo = () => {
-      if (!window._gastos.length) { window.toast('Nenhum gasto.'); return; }
-      if (!confirm('Remover tudo?')) return;
-      window._gastos = []; save(); window.renderUI(); window.toast('🗑️ Removido.');
-    };
-    window.renderUI();
-  };
-
-  // Segurança: se nada responder em 8s, cai pro localStorage
-  setTimeout(() => {
-    const el = document.getElementById('loadingScreen');
-    if (el && !el.classList.contains('gone')) {
-      hideLoading();
-      window.setSyncStatus('error', 'tempo esgotado — usando local');
-      window.iniciarLocalStorage();
-    }
-  }, 8000);
 
   const CAT_COLORS = {
     'alimentação':'#f0b429','transporte':'#60a5fa','saúde':'#34d399',
@@ -432,12 +261,17 @@
 
   function fmt(v) { return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 
+  // Função Render atualizada para filtrar por mês
   function renderUI() {
-    const teto   = window._teto   || 0;
-    const gastos = window._gastos || [];
-    const total  = gastos.reduce((s,g) => s + g.valor, 0);
-    const saldo  = teto - total;
-    const pct    = teto > 0 ? Math.min((total / teto) * 100, 100) : 0;
+    const mesSelecionado = document.getElementById('mesFiltro').value;
+    const teto = window._teto || 0;
+    
+    // Filtra gastos para incluir apenas os do mês selecionado
+    const gastosMes = (window._gastos || []).filter(g => g.data.startsWith(mesSelecionado));
+    
+    const total = gastosMes.reduce((s,g) => s + g.valor, 0);
+    const saldo = teto - total;
+    const pct   = teto > 0 ? Math.min((total / teto) * 100, 100) : 0;
 
     document.getElementById('cardTeto').textContent  = teto ? fmt(teto) : 'R$ —';
     document.getElementById('cardGasto').textContent = fmt(total);
@@ -455,11 +289,11 @@
     document.getElementById('pct').textContent = Math.round(pct) + '%';
 
     const list = document.getElementById('expenseList');
-    if (!gastos.length) {
-      list.innerHTML = '<div class="empty-state">Nenhum gasto registrado ainda.</div>';
+    if (!gastosMes.length) {
+      list.innerHTML = '<div class="empty-state">Nenhum gasto neste mês.</div>';
       return;
     }
-    list.innerHTML = gastos.map(g => {
+    list.innerHTML = gastosMes.map(g => {
       const cor     = CAT_COLORS[g.cat] || '#94a3b8';
       const dataFmt = new Date(g.data + 'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
       return `
@@ -479,6 +313,33 @@
   }
   window.renderUI = renderUI;
 
+  // Atualização do Teto Local 
+  window.carregarTetoLocal = (mesAno) => {
+    window._teto = parseFloat(localStorage.getItem(`gw_teto_${mesAno}`)) || 0;
+    document.getElementById('tetoInput').value = window._teto || '';
+    window.renderUI();
+  };
+
+  // Exportar CSV (Exporta APENAS o mês filtrado)
+  window.exportarCSV = () => {
+    const mesSelecionado = document.getElementById('mesFiltro').value;
+    const gastosMes = (window._gastos || []).filter(g => g.data.startsWith(mesSelecionado));
+    if (gastosMes.length === 0) { window.toast('⚠️ Não há dados neste mês.'); return; }
+    
+    let csv = "Data;Descricao;Categoria;Valor\n";
+    gastosMes.forEach(g => {
+      csv += `${g.data};${g.desc};${g.cat};${g.valor.toFixed(2).replace('.', ',')}\n`;
+    });
+    
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `gastos_${mesSelecionado}.csv`;
+    link.click();
+    window.toast('📊 CSV de ' + mesSelecionado + ' exportado!');
+  };
+
   function setSyncStatus(state, text) {
     document.getElementById('syncDot').className = 'sync-dot ' + state;
     document.getElementById('syncText').textContent = text;
@@ -495,10 +356,178 @@
   }
   window.toast = toast;
 
-  document.getElementById('monthLabel').textContent =
-    new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-  document.getElementById('dataInput').value =
-    new Date().toISOString().split('T')[0];
+  // Lógica LocalStorage
+  window.iniciarLocalStorage = function() {
+    if (window._localStorageAtivo) return;
+    window._localStorageAtivo = true;
+    window._firebaseAtivo = false;
+
+    window._gastos = JSON.parse(localStorage.getItem('gw_gastos') || '[]');
+    window.carregarTetoLocal(document.getElementById('mesFiltro').value);
+
+    const save = () => {
+      const mesSelecionado = document.getElementById('mesFiltro').value;
+      localStorage.setItem(`gw_teto_${mesSelecionado}`, window._teto);
+      localStorage.setItem('gw_gastos', JSON.stringify(window._gastos));
+    };
+
+    window.salvarTeto = () => {
+      const v = parseFloat(document.getElementById('tetoInput').value);
+      if (!v||v<=0) { window.toast('⚠️ Valor inválido.'); return; }
+      window._teto = v; save(); window.renderUI(); window.toast('✅ Teto mensal salvo!');
+    };
+
+    window.adicionarGasto = () => {
+      const desc = document.getElementById('descInput').value.trim();
+      const valor = parseFloat(document.getElementById('valorInput').value);
+      const cat = document.getElementById('catInput').value;
+      const data = document.getElementById('dataInput').value;
+      if (!desc||!valor||valor<=0||!data) { window.toast('⚠️ Preencha tudo.'); return; }
+      window._gastos.unshift({ id: Date.now(), desc, valor, cat, data });
+      save(); window.renderUI();
+      document.getElementById('descInput').value = '';
+      document.getElementById('valorInput').value = '';
+      window.toast('✅ Gasto salvo!');
+    };
+
+    window.removerGasto = (id) => {
+      window._gastos = window._gastos.filter(g => String(g.id) !== String(id));
+      save(); window.renderUI();
+    };
+
+    window.limparTudo = () => {
+      const mesSelecionado = document.getElementById('mesFiltro').value;
+      const gastosMes = window._gastos.filter(g => g.data.startsWith(mesSelecionado));
+      if (!gastosMes.length) { window.toast('Nenhum gasto neste mês.'); return; }
+      if (!confirm(`Remover TODOS os gastos do mês ${mesSelecionado}?`)) return;
+      window._gastos = window._gastos.filter(g => !g.data.startsWith(mesSelecionado));
+      save(); window.renderUI(); window.toast('🗑️ Mês limpo.');
+    };
+  };
+
+  // Alterar mês no seletor
+  document.getElementById('mesFiltro').addEventListener('change', (e) => {
+    const mes = e.target.value;
+    if (window._firebaseAtivo && window.carregarTetoFirebase) {
+      window.carregarTetoFirebase(mes);
+    } else if (window._localStorageAtivo) {
+      window.carregarTetoLocal(mes);
+    }
+  });
+
+  // Timeout de segurança
+  setTimeout(() => {
+    const el = document.getElementById('loadingScreen');
+    if (el && !el.classList.contains('gone')) {
+      hideLoading();
+      window.setSyncStatus('error', 'tempo esgotado — local');
+      window.iniciarLocalStorage();
+    }
+  }, 8000);
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, collection, addDoc, deleteDoc, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBDHygEQHqXYzebYqvL5vICCIjY0xD7-uM",
+    authDomain: "meus-gastos-d7dc2.firebaseapp.com",
+    projectId: "meus-gastos-d7dc2",
+    storageBucket: "meus-gastos-d7dc2.firebasestorage.app",
+    messagingSenderId: "965342526071",
+    appId: "1:965342526071:web:b59c78862fefad4e8c6472"
+  };
+
+  const CONFIGURED = firebaseConfig.apiKey !== "COLE_AQUI" && firebaseConfig.apiKey.length > 10;
+  let db;
+  let tetoUnsubscribe = null;
+  window._firebaseAtivo = false;
+
+  if (!CONFIGURED) {
+    document.getElementById('configBanner').style.display = 'block';
+    window.hideLoading();
+    window.setSyncStatus('error', 'não configurado — local');
+    window.iniciarLocalStorage();
+  } else {
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      window._firebaseAtivo = true;
+    } catch (err) {
+      console.error(err);
+      window.hideLoading();
+      window.setSyncStatus('error', 'falha firebase — local');
+      window.iniciarLocalStorage();
+    }
+  }
+
+  if (window._firebaseAtivo) {
+    const gastosCol = collection(db, "gastos");
+
+    window.carregarTetoFirebase = (mesAno) => {
+      if (tetoUnsubscribe) tetoUnsubscribe();
+      tetoUnsubscribe = onSnapshot(doc(db, "config", `teto_${mesAno}`), snap => {
+        window._teto = snap.exists() ? (snap.data().valor || 0) : 0;
+        document.getElementById('tetoInput').value = window._teto || '';
+        window.renderUI();
+      });
+    };
+
+    // Inicia ouvindo a coleção completa (o filtro acontece na UI)
+    onSnapshot(query(gastosCol), snap => {
+      window._gastos = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
+      window.renderUI();
+      window.hideLoading();
+      window.setSyncStatus('ok', 'sincronizado');
+    }, err => {
+      window.setSyncStatus('error', 'erro de conexão — local');
+      window.hideLoading();
+      window.iniciarLocalStorage();
+    });
+
+    // Carrega o teto do mês atual inicialmente
+    window.carregarTetoFirebase(document.getElementById('mesFiltro').value);
+
+    window.salvarTeto = async () => {
+      const v = parseFloat(document.getElementById('tetoInput').value);
+      const mesAno = document.getElementById('mesFiltro').value;
+      if (!v || v <= 0) { window.toast('⚠️ Valor inválido.'); return; }
+      window.setSyncStatus('syncing', 'salvando…');
+      await setDoc(doc(db, "config", `teto_${mesAno}`), { valor: v });
+      window.toast('✅ Teto mensal definido!');
+    };
+
+    window.adicionarGasto = async () => {
+      const desc = document.getElementById('descInput').value.trim();
+      const valor = parseFloat(document.getElementById('valorInput').value);
+      const cat = document.getElementById('catInput').value;
+      const data = document.getElementById('dataInput').value;
+      if (!desc || !valor || valor <= 0 || !data) { window.toast('⚠️ Preencha tudo.'); return; }
+      window.setSyncStatus('syncing', 'salvando…');
+      await addDoc(gastosCol, { desc, valor, cat, data, criadoEm: Date.now() });
+      document.getElementById('descInput').value = '';
+      document.getElementById('valorInput').value = '';
+      window.toast('✅ Gasto registado!');
+    };
+
+    window.removerGasto = async (id) => {
+      window.setSyncStatus('syncing', 'removendo…');
+      await deleteDoc(doc(db, "gastos", id));
+    };
+
+    window.limparTudo = async () => {
+      const mesSelecionado = document.getElementById('mesFiltro').value;
+      const gastosMes = (window._gastos || []).filter(g => g.data.startsWith(mesSelecionado));
+      if (!gastosMes.length) { window.toast('Nenhum gasto neste mês.'); return; }
+      if (!confirm(`Remover TODOS os gastos do mês ${mesSelecionado}?`)) return;
+      window.setSyncStatus('syncing', 'limpando…');
+      await Promise.all(gastosMes.map(g => deleteDoc(doc(db, "gastos", g.id))));
+      window.toast('🗑️ Mês limpo.');
+    };
+  }
 </script>
 </body>
 </html>
