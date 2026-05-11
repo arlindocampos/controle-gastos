@@ -249,13 +249,12 @@
   // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
   // ════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyDvs6JCL1LsTrrntNcpnEp-qvRheB6BiKY",
-  authDomain: "controle-gastos-57fc1.firebaseapp.com",
-  projectId: "controle-gastos-57fc1",
-  storageBucket: "controle-gastos-57fc1.appspot.com",
-  messagingSenderId: "501352969307",
-  appId: "1:501352969307:web:3e06e4869e9e37d7113b7e",
-  measurementId: "G-2NKX3KRH7J"
+  apiKey: "AIzaSyBDHygEQHqXYzebYqvL5vICCIjY0xD7-uM",
+  authDomain: "meus-gastos-d7dc2.firebaseapp.com",
+  projectId: "meus-gastos-d7dc2",
+  storageBucket: "meus-gastos-d7dc2.firebasestorage.app",
+  messagingSenderId: "965342526071",
+  appId: "1:965342526071:web:b59c78862fefad4e8c6472"
 };
   // ════════════════════════════════════════════════════
 
@@ -394,11 +393,12 @@ try {
   window.hideLoading = hideLoading;
 
   // Segurança: esconde após 8s mesmo que algo dê errado
-  setTimeout(() => {
+setTimeout(() => {
     const el = document.getElementById('loadingScreen');
     if (!el.classList.contains('gone')) {
       hideLoading();
-      setSyncStatus('error', 'tempo esgotado');
+      setSyncStatus('error', 'tempo esgotado — usando local');
+      iniciarLocalStorage();  // ← adiciona essa linha
     }
   }, 8000);
 
