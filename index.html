@@ -248,66 +248,80 @@
   // ════════════════════════════════════════════════════
   // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
   // ════════════════════════════════════════════════════
-const firebaseConfig = {
-  apiKey: "AIzaSyBDHygEQHqXYzebYqvL5vICCIjY0xD7-uM",
-  authDomain: "meus-gastos-d7dc2.firebaseapp.com",
-  projectId: "meus-gastos-d7dc2",
-  storageBucket: "meus-gastos-d7dc2.firebasestorage.app",
-  messagingSenderId: "965342526071",
-  appId: "1:965342526071:web:b59c78862fefad4e8c6472"
-};
+  const firebaseConfig = {
+    apiKey: "AIzaSyBDHygEQHqXYzebYqvL5vICCIjY0xD7-uM",
+    authDomain: "meus-gastos-d7dc2.firebaseapp.com",
+    projectId: "meus-gastos-d7dc2",
+    storageBucket: "meus-gastos-d7dc2.firebasestorage.app",
+    messagingSenderId: "965342526071",
+    appId: "1:965342526071:web:b59c78862fefad4e8c6472"
+  };
   // ════════════════════════════════════════════════════
 
   const CONFIGURED = firebaseConfig.apiKey !== "COLE_AQUI" && firebaseConfig.apiKey.length > 10;
 
   if (!CONFIGURED) {
     document.getElementById('configBanner').style.display = 'block';
-    hideLoading();
-    setSyncStatus('error', 'não configurado — usando local');
-    iniciarLocalStorage();
+    window.hideLoading();
+    window.setSyncStatus('error', 'não configurado — usando local');
+    window.iniciarLocalStorage();
     return;
   }
 
   // ── Firebase ─────────────────────────────────────────
-let db;
+  let db;
 
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-} catch (err) {
-  console.error(err);
-  hideLoading();
-  setSyncStatus('error', 'falha firebase');
-  iniciarLocalStorage();
-}
-  const tetoRef  = doc(db, "config", "teto");
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  } catch (err) {
+    console.error(err);
+    window.hideLoading();
+    window.setSyncStatus('error', 'falha ao iniciar firebase');
+    window.iniciarLocalStorage();
+    // Interrompe a execução do módulo se o Firebase falhar na inicialização
+    throw err;
+  }
+
+  const tetoRef   = doc(db, "config", "teto");
   const gastosCol = collection(db, "gastos");
 
   // Listener: teto
   onSnapshot(tetoRef, snap => {
     window._teto = snap.exists() ? (snap.data().valor || 0) : 0;
     if (window._teto) document.getElementById('tetoInput').value = window._teto;
-    renderUI();
-  }, err => console.error('teto:', err));
+    window.renderUI();
+  }, err => {
+    console.error('teto:', err);
+  });
 
-  // Listener: gastos (tempo real)
-  onSnapshot(query(gastosCol, orderBy("criadoEm", "desc")), snap => {
-    window._gastos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderUI();
-    hideLoading();
-    setSyncStatus('ok', 'sincronizado');
+  // ─────────────────────────────────────────────────────
+  // CORREÇÃO: removido o orderBy do Firestore.
+  // O orderBy exigia um índice especial no Firebase que não é
+  // criado automaticamente. Agora ordenamos no próprio JavaScript,
+  // o que funciona igual e não depende de configuração extra.
+  // ─────────────────────────────────────────────────────
+  onSnapshot(query(gastosCol), snap => {
+    window._gastos = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0)); // ordenação client-side
+    window.renderUI();
+    window.hideLoading();
+    window.setSyncStatus('ok', 'sincronizado');
   }, err => {
     console.error('gastos:', err);
-    setSyncStatus('error', 'erro de conexão');
-    hideLoading();
+    window.setSyncStatus('error', 'erro de conexão — usando local');
+    window.hideLoading();
+    // CORREÇÃO: agora cai pro localStorage quando o Firebase falha
+    window.iniciarLocalStorage();
   });
 
   window.salvarTeto = async () => {
     const v = parseFloat(document.getElementById('tetoInput').value);
-    if (!v || v <= 0) { toast('⚠️ Informe um valor válido.'); return; }
-    setSyncStatus('syncing', 'salvando…');
+    if (!v || v <= 0) { window.toast('⚠️ Informe um valor válido.'); return; }
+    window.setSyncStatus('syncing', 'salvando…');
     await setDoc(tetoRef, { valor: v });
-    toast('✅ Teto definido!');
+    window.toast('✅ Teto definido!');
   };
 
   window.adicionarGasto = async () => {
@@ -315,31 +329,54 @@ try {
     const valor = parseFloat(document.getElementById('valorInput').value);
     const cat   = document.getElementById('catInput').value;
     const data  = document.getElementById('dataInput').value;
-    if (!desc)          { toast('⚠️ Adicione uma descrição.'); return; }
-    if (!valor||valor<=0) { toast('⚠️ Informe um valor válido.'); return; }
-    if (!data)          { toast('⚠️ Selecione a data.'); return; }
-    setSyncStatus('syncing', 'salvando…');
+    if (!desc)            { window.toast('⚠️ Adicione uma descrição.'); return; }
+    if (!valor||valor<=0) { window.toast('⚠️ Informe um valor válido.'); return; }
+    if (!data)            { window.toast('⚠️ Selecione a data.'); return; }
+    window.setSyncStatus('syncing', 'salvando…');
     await addDoc(gastosCol, { desc, valor, cat, data, criadoEm: Date.now() });
     document.getElementById('descInput').value  = '';
     document.getElementById('valorInput').value = '';
-    toast('✅ Gasto registrado!');
+    window.toast('✅ Gasto registrado!');
   };
 
   window.removerGasto = async (id) => {
-    setSyncStatus('syncing', 'removendo…');
+    window.setSyncStatus('syncing', 'removendo…');
     await deleteDoc(doc(db, "gastos", id));
   };
 
   window.limparTudo = async () => {
-    if (!window._gastos?.length) { toast('Nenhum gasto para limpar.'); return; }
+    if (!window._gastos?.length) { window.toast('Nenhum gasto para limpar.'); return; }
     if (!confirm('Remover todos os gastos?')) return;
-    setSyncStatus('syncing', 'limpando…');
+    window.setSyncStatus('syncing', 'limpando…');
     await Promise.all(window._gastos.map(g => deleteDoc(doc(db, "gastos", g.id))));
-    toast('🗑️ Gastos removidos.');
+    window.toast('🗑️ Gastos removidos.');
   };
+</script>
 
-  // ── localStorage fallback ────────────────────────────
-  function iniciarLocalStorage() {
+<!-- UI helpers (não depende do Firebase) -->
+<script>
+  window._teto   = 0;
+  window._gastos = [];
+
+  // Esconde a tela de carregamento com fade + display:none
+  function hideLoading() {
+    const el = document.getElementById('loadingScreen');
+    if (!el) return;
+    el.classList.add('hidden');
+    setTimeout(() => el.classList.add('gone'), 450);
+  }
+  window.hideLoading = hideLoading;
+
+  // ─────────────────────────────────────────────────────
+  // CORREÇÃO: iniciarLocalStorage agora está exposta no window
+  // para que o timeout de segurança (e o módulo Firebase)
+  // consigam chamá-la de qualquer lugar.
+  // ─────────────────────────────────────────────────────
+  window.iniciarLocalStorage = function iniciarLocalStorage() {
+    // Evita rodar duas vezes caso Firebase e timeout disparem juntos
+    if (window._localStorageAtivo) return;
+    window._localStorageAtivo = true;
+
     window._teto   = parseFloat(localStorage.getItem('gw_teto'))  || 0;
     window._gastos = JSON.parse(localStorage.getItem('gw_gastos') || '[]');
     if (window._teto) document.getElementById('tetoInput').value = window._teto;
@@ -351,54 +388,40 @@ try {
 
     window.salvarTeto = () => {
       const v = parseFloat(document.getElementById('tetoInput').value);
-      if (!v||v<=0) { toast('⚠️ Informe um valor válido.'); return; }
-      window._teto = v; save(); renderUI(); toast('✅ Teto definido (local)!');
+      if (!v||v<=0) { window.toast('⚠️ Informe um valor válido.'); return; }
+      window._teto = v; save(); window.renderUI(); window.toast('✅ Teto definido (local)!');
     };
     window.adicionarGasto = () => {
       const desc  = document.getElementById('descInput').value.trim();
       const valor = parseFloat(document.getElementById('valorInput').value);
       const cat   = document.getElementById('catInput').value;
       const data  = document.getElementById('dataInput').value;
-      if (!desc||!valor||valor<=0||!data) { toast('⚠️ Preencha todos os campos.'); return; }
+      if (!desc||!valor||valor<=0||!data) { window.toast('⚠️ Preencha todos os campos.'); return; }
       window._gastos.unshift({ id: Date.now(), desc, valor, cat, data });
-      save(); renderUI();
+      save(); window.renderUI();
       document.getElementById('descInput').value  = '';
       document.getElementById('valorInput').value = '';
-      toast('✅ Gasto registrado (local)!');
+      window.toast('✅ Gasto registrado (local)!');
     };
     window.removerGasto = (id) => {
       window._gastos = window._gastos.filter(g => String(g.id) !== String(id));
-      save(); renderUI();
+      save(); window.renderUI();
     };
     window.limparTudo = () => {
-      if (!window._gastos.length) { toast('Nenhum gasto.'); return; }
+      if (!window._gastos.length) { window.toast('Nenhum gasto.'); return; }
       if (!confirm('Remover tudo?')) return;
-      window._gastos = []; save(); renderUI(); toast('🗑️ Removido.');
+      window._gastos = []; save(); window.renderUI(); window.toast('🗑️ Removido.');
     };
-    renderUI();
-  }
-</script>
+    window.renderUI();
+  };
 
-<!-- UI helpers (não depende do Firebase) -->
-<script>
-  window._teto   = 0;
-  window._gastos = [];
-
-  // Esconde a tela de carregamento com fade + display:none
-  function hideLoading() {
+  // Segurança: se nada responder em 8s, cai pro localStorage
+  setTimeout(() => {
     const el = document.getElementById('loadingScreen');
-    el.classList.add('hidden');
-    setTimeout(() => el.classList.add('gone'), 450);
-  }
-  window.hideLoading = hideLoading;
-
-  // Segurança: esconde após 8s mesmo que algo dê errado
-setTimeout(() => {
-    const el = document.getElementById('loadingScreen');
-    if (!el.classList.contains('gone')) {
+    if (el && !el.classList.contains('gone')) {
       hideLoading();
-      setSyncStatus('error', 'tempo esgotado — usando local');
-      iniciarLocalStorage();  // ← adiciona essa linha
+      window.setSyncStatus('error', 'tempo esgotado — usando local');
+      window.iniciarLocalStorage();
     }
   }, 8000);
 
@@ -455,11 +478,13 @@ setTimeout(() => {
         </div>`;
     }).join('');
   }
+  window.renderUI = renderUI;
 
   function setSyncStatus(state, text) {
     document.getElementById('syncDot').className = 'sync-dot ' + state;
     document.getElementById('syncText').textContent = text;
   }
+  window.setSyncStatus = setSyncStatus;
 
   let _toastTimer;
   function toast(msg) {
@@ -469,6 +494,7 @@ setTimeout(() => {
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => { el.classList.add('hide'); setTimeout(()=>el.remove(), 300); }, 2500);
   }
+  window.toast = toast;
 
   document.getElementById('monthLabel').textContent =
     new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
